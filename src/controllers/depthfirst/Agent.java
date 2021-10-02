@@ -1,16 +1,11 @@
 package controllers.depthfirst;
 
 import java.awt.Graphics2D;
-import java.lang.reflect.Array;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
 import java.util.Stack;
 
 import core.game.Observation;
 import core.game.StateObservation;
-import core.competition.CompetitionParameters;
 import core.player.AbstractPlayer;
 import ontology.Types;
 import tools.ElapsedCpuTimer;
