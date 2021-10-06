@@ -48,7 +48,7 @@ public class Agent extends AbstractPlayer{
             ElapsedCpuTimer elapsedTimerIteration = new ElapsedCpuTimer();
 
             controller.roll();
-            action = controller.getAction();
+
 
 
             // time limit code
@@ -57,6 +57,7 @@ public class Agent extends AbstractPlayer{
             avgTime = totalTime/iterTime;
             remaining = elapsedTimer.remainingTimeMillis();
         }
+        action = controller.getAction();
         return action;
     }
 
@@ -119,7 +120,7 @@ class DepthLimitController {
         }
     }
     public Types.ACTIONS getAction() {
-        StackTree m = trees.stream().min(Comparator.comparing(StackTree::getPoint)).orElse(null);
+        StackTree m = trees.stream().max(Comparator.comparing(StackTree::getPoint)).orElse(null);
         if (m == null) {
             return null;
         }
@@ -153,7 +154,7 @@ class StackTree {
         this.fringe.push(rootNode);
     }
     public void expand() {
-        if(this.fringe.peek().isActable() && this.fringe.peek().depth < 5) {
+        if(this.fringe.peek().isActable() && this.fringe.peek().depth < 10) {
             Node select = this.fringe.peek();
             Types.ACTIONS expandAction = select.getAction();
             this.inProcess.advance(expandAction);
@@ -235,38 +236,46 @@ class Node {
         }
     }
     private double getValue(StateObservation state) {
+        if(state.getGameWinner() == Types.WINNER.PLAYER_WINS) { return Double.NEGATIVE_INFINITY; }
+
+        int measurement; // 1 for no key and 4 for having key
+        // for init no type
+        try {
+            int type = state.getAvatarType();
+        }
+        catch (Exception e) {
+            return Double.POSITIVE_INFINITY;
+        }
+        // check state
+        if (state.getAvatarType() == 4) {measurement = 1;}
+        else { measurement = 0; }
+        Vector2d avatarpos = state.getAvatarPosition();
+
         ArrayList<Observation>[] fixedPositions = state.getImmovablePositions();
         ArrayList<Observation>[] movingPositions = state.getMovablePositions();
         Vector2d goalpos = fixedPositions[1].get(0).position; //目标的坐标
-        Vector2d keypos = movingPositions[0].get(0).position; //钥匙的坐标
-        Vector2d avatarpos = state.getAvatarPosition();
 
-        int measurement; // 1 for no key and 4 for having key
-        if (state.getAvatarType() == 4) {measurement = 1;}
-        else { measurement = 0; }
 
-        double distKey = Math.abs(keypos.copy().subtract(avatarpos).x)
-                        + Math.abs(keypos.copy().subtract(avatarpos).y);
+        if (measurement != 1) {
+            Vector2d keypos = movingPositions[0].get(0).position; //钥匙的坐标
+            double distKey = Math.abs(keypos.copy().subtract(avatarpos).x)
+                    + Math.abs(keypos.copy().subtract(avatarpos).y);
+            double distGoal = Math.abs(goalpos.copy().subtract(keypos).x)
+                            + Math.abs(goalpos.copy().subtract(keypos).y);
 
-        Vector2d target;
-        if (measurement == 0) {target = keypos;}
-        else {target = avatarpos;}
-        double distGoal = Math.abs(goalpos.copy().subtract(target).x)
-                + Math.abs(goalpos.copy().subtract(target).y);
-
-        return (1 - measurement)*distKey + distGoal;
-
+            return distKey + distGoal;
+        }
+        else {
+             return Math.abs(goalpos.copy().subtract(avatarpos).x)
+                    + Math.abs(goalpos.copy().subtract(avatarpos).y);
+        }
     }
 
     private void passValue(StateObservation state) {
         // for no-candidate
         if (this.candidateParent != null ) {
-            if (state.getGameWinner() == Types.WINNER.PLAYER_WINS ) { this.candidateParent.point = Double.NEGATIVE_INFINITY; }
-            else if (this.candidateParent.value > this.value) { this.candidateParent.point++; }
-        }
-        // for candidate
-        else {
-            if (state.getGameWinner() == Types.WINNER.PLAYER_WINS) { this.point = Double.NEGATIVE_INFINITY; }
+           //if (state.getGameWinner() == Types.WINNER.PLAYER_WINS ) { this.candidateParent.point = Double.NEGATIVE_INFINITY; }
+           if (this.candidateParent.value > this.value) { this.candidateParent.point++; }
         }
     }
 }
