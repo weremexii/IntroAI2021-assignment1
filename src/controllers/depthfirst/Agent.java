@@ -1,6 +1,5 @@
 package controllers.depthfirst;
 
-import java.awt.Graphics2D;
 import java.util.ArrayList;
 import java.util.Stack;
 
@@ -43,45 +42,6 @@ public class Agent extends AbstractPlayer{
         return this.tree.act();
     }
 
-    /**
-     * Prints the number of different types of sprites available in the "positions" array.
-     * Between brackets, the number of observations of each type.
-     * @param positions array with observations.
-     * @param str identifier to print
-     */
-    private void printDebug(ArrayList<Observation>[] positions, String str)
-    {
-        if(positions != null){
-            System.out.print(str + ":" + positions.length + "(");
-            for (int i = 0; i < positions.length; i++) {
-                System.out.print(positions[i].size() + ",");
-            }
-            System.out.print("); ");
-        }else System.out.print(str + ": 0; ");
-    }
-
-    /**
-     * Gets the player the control to draw something on the screen.
-     * It can be used for debug purposes.
-     * @param g Graphics device to draw to.
-     */
-    public void draw(Graphics2D g)
-    {
-        int half_block = (int) (block_size*0.5);
-        for(int j = 0; j < grid[0].length; ++j)
-        {
-            for(int i = 0; i < grid.length; ++i)
-            {
-                if(grid[i][j].size() > 0)
-                {
-                    Observation firstObs = grid[i][j].get(0); //grid[i][j].size()-1
-                    //Three interesting options:
-                    int print = firstObs.category; //firstObs.itype; //firstObs.obsID;
-                    g.drawString(print + "", i*block_size+half_block,j*block_size+half_block);
-                }
-            }
-        }
-    }
 }
 
 class StackTree {

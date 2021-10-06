@@ -1,4 +1,4 @@
-package controllers.limitdepthfirst;
+package controllers.Astar;
 
 import core.game.Observation;
 import core.game.StateObservation;
@@ -10,16 +10,18 @@ import tools.Vector2d;
 import java.util.*;
 
 public class Agent extends AbstractPlayer{
-    // index table for itype
+    //boolean init = false;
     static int indexGoal=0;
     static int indexKey=0;
     static int indexMush=0;
     static int indexHole=0;
     static int totalHole=0;
 
-    final int limit = 5;
-    Result lastResult = null;
+    //final int limit = 10;
+    //Result lastResult = null;
+    HashSet<Integer> oldState = new HashSet<>();
     Stack<StateObservation> closed = new Stack<>();
+    //HashSet<Integer> explorer = new HashSet<>();
 
     public Agent(StateObservation stateObs, ElapsedCpuTimer elapsedTimer) {
         // init
@@ -35,47 +37,52 @@ public class Agent extends AbstractPlayer{
      */
     public Types.ACTIONS act(StateObservation stateObs, ElapsedCpuTimer elapsedTimer)
     {
+        // init
+        //if(!this.init) {this.getIndex(stateObs);this.init=true;}
+        this.oldState.add(Arrays.deepHashCode(stateObs.getObservationGrid()));
         this.closed.push(stateObs.copy());
+        //if(this.lastResult == null || this.lastResult.path.size() == 0) {
+        //    this.lastResult = this.treeSearch(stateObs);
+        //}
         Types.ACTIONS action = null;
-
-        if (this.lastResult == null || this.lastResult.path.size() == 0)
-            this.lastResult = this.treeSearch(stateObs);
-
+        //this.explorer.addAll(this.oldState);
+        Result newResult = this.treeSearch(stateObs);
         // pop null
-        while (this.lastResult.path.peek() == null) {
-            this.lastResult.path.pop();
+        while (newResult.path.peek() == null) {
+            newResult.path.pop();
         }
-        action = this.lastResult.path.pop();
+        action = newResult.path.pop();
         return action;
     }
 
     public Result treeSearch(StateObservation stateObs) {
         Node root = new Node(null, stateObs, 0);
-        Result searchResult = this.recersiveDLS(root, stateObs);
+        Result searchResult = this.Astar(root, stateObs);
+        //assert(searchResult.path.pop() == null); // pop the root
         return searchResult;
     }
 
-    public Result recersiveDLS(Node node, StateObservation stateObs) {
-        if (node.depth == this.limit)
-            return new Result(node.action, node.score);
-        else {
+    public Result Astar(Node node, StateObservation stateObs) {
+            // goal-test
+            ;
             ArrayList<Result> results = new ArrayList<>();
             for (Integer i: this.expand(stateObs)) {
                 Types.ACTIONS action = stateObs.getAvailableActions().get(i);
                 StateObservation stateCop = stateObs.copy();
                 stateCop.advance(action);
 
+                //this.explorer.add(Arrays.deepHashCode(stateCop.getObservationGrid()));
+
                 Node newNode = new Node(action, stateCop, node.depth+1);
-                results.add(recersiveDLS(newNode, stateCop));
+                results.add(new Result(newNode.action, newNode.score));
             }
             if (results.isEmpty())
                 return new Result(node.action, node.score);
             else {
                 Result maxresult = results.stream().min(Comparator.comparing(Result::getMaxScore)).get();
-                maxresult.path.push(node.action);
                 return maxresult;
             }
-        }
+
     }
 
     public ArrayList<Integer> expand(StateObservation stateObs) {
@@ -158,7 +165,7 @@ class Node {
                 double distKey = Math.abs(keypos.copy().subtract(avatarpos).x)
                         + Math.abs(keypos.copy().subtract(avatarpos).y);
                 distKey = distKey/50;
-                return this.calH(stateObs) + (float)distKey;
+                return this.depth + this.calH(stateObs) + (float)distKey;
             }
             else {
                 return 0.0F;
