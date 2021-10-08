@@ -1,6 +1,6 @@
 import java.lang.annotation.Repeatable;
 import java.util.Random;
-
+import core.competition.CompetitionParameters;
 import core.ArcadeMachine;
 
 /**
@@ -15,7 +15,7 @@ public class Test
 
     public static void main(String[] args)
     {
-        
-        ArcadeMachine.playOneGame( "examples/gridphysics/bait.txt", "examples/gridphysics/bait_lvl1.txt", null, new Random().nextInt());
+        CompetitionParameters.MAX_TIMESTEPS = 100000;
+        ArcadeMachine.playOneGame( "examples/gridphysics/bait.txt", "examples/gridphysics/bait_lvl2.txt", null, new Random().nextInt());
     }
 }

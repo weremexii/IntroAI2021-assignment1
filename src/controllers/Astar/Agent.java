@@ -10,23 +10,13 @@ import tools.Vector2d;
 import java.util.*;
 
 public class Agent extends AbstractPlayer{
-    //boolean init = false;
-    static int indexGoal=0;
-    static int indexKey=0;
-    static int indexMush=0;
-    static int indexHole=0;
-    static int totalHole=0;
 
-    //final int limit = 10;
-    //Result lastResult = null;
-    HashSet<Integer> oldState = new HashSet<>();
+    final int limit = 4; // depth limit for indicate push boxes
     Stack<StateObservation> closed = new Stack<>();
-    //HashSet<Integer> explorer = new HashSet<>();
 
     public Agent(StateObservation stateObs, ElapsedCpuTimer elapsedTimer) {
-        // init
-        this.getIndex(stateObs);
-    }
+        ;
+    } // empty constructor
 
     /**
      * Picks an action. This function is called every game step to request an
@@ -37,52 +27,51 @@ public class Agent extends AbstractPlayer{
      */
     public Types.ACTIONS act(StateObservation stateObs, ElapsedCpuTimer elapsedTimer)
     {
-        // init
-        //if(!this.init) {this.getIndex(stateObs);this.init=true;}
-        this.oldState.add(Arrays.deepHashCode(stateObs.getObservationGrid()));
+        // record old state
         this.closed.push(stateObs.copy());
-        //if(this.lastResult == null || this.lastResult.path.size() == 0) {
-        //    this.lastResult = this.treeSearch(stateObs);
-        //}
+
         Types.ACTIONS action = null;
-        //this.explorer.addAll(this.oldState);
-        Result newResult = this.treeSearch(stateObs);
+        Result result = this.treeSearch(stateObs);
         // pop null
-        while (newResult.path.peek() == null) {
-            newResult.path.pop();
+        while (!result.path.isEmpty() && result.path.peek() == null) {
+            result.path.pop();
         }
-        action = newResult.path.pop();
+        if (result.path.isEmpty()) {
+            return null;
+        }
+        else {
+            action = result.path.pop();
+        }
         return action;
     }
 
     public Result treeSearch(StateObservation stateObs) {
         Node root = new Node(null, stateObs, 0);
-        Result searchResult = this.Astar(root, stateObs);
-        //assert(searchResult.path.pop() == null); // pop the root
-        return searchResult;
+        return this.Astar(root, stateObs);
     }
 
     public Result Astar(Node node, StateObservation stateObs) {
-            // goal-test
-            ;
+        if (node.depth == this.limit) {
+            return new Result(node.action, node.score);
+        }
+        else {
             ArrayList<Result> results = new ArrayList<>();
             for (Integer i: this.expand(stateObs)) {
                 Types.ACTIONS action = stateObs.getAvailableActions().get(i);
                 StateObservation stateCop = stateObs.copy();
                 stateCop.advance(action);
 
-                //this.explorer.add(Arrays.deepHashCode(stateCop.getObservationGrid()));
-
                 Node newNode = new Node(action, stateCop, node.depth+1);
-                results.add(new Result(newNode.action, newNode.score));
+                results.add(this.Astar(newNode, stateCop)); // recursive call Astar
             }
             if (results.isEmpty())
                 return new Result(node.action, node.score);
             else {
                 Result maxresult = results.stream().min(Comparator.comparing(Result::getMaxScore)).get();
+                maxresult.path.push(node.action);
                 return maxresult;
             }
-
+        }
     }
 
     public ArrayList<Integer> expand(StateObservation stateObs) {
@@ -93,8 +82,7 @@ public class Agent extends AbstractPlayer{
         for(int i = 0; i < actions.size(); i++) {
             StateObservation stateCop = stateObs.copy();
             stateCop.advance(actions.get(i));
-            //if(!stateCop.equalPosition(stateObs) && !this.oldState.contains(Arrays.deepHashCode(stateCop.getObservationGrid())) )
-            if(!stateCop.equalPosition(stateObs) && !this.compareClosed(stateCop))
+            if(!stateCop.equalPosition(stateObs) && !this.compareClosed(stateCop)) // check for repeated state
                 actual.add(i);
         }
         return actual;
@@ -107,102 +95,122 @@ public class Agent extends AbstractPlayer{
         }
         return false;
     }
+}
 
-    public void getIndex(StateObservation stateObs) {
+class Node {
+    Types.ACTIONS action;
+    int depth;
+    double score;
+    // index table
+    int indexGoal=-1;
+    int indexKey=-1;
+    int indexMush=-1;
+    int indexHole=-1;
+    int indexBox=-1;
+    int totalHole=-1;
+
+    public Node(Types.ACTIONS action, StateObservation stateObs, int depth) {
+        this.action = action;
+        this.depth = depth;
+        this.getIndex(stateObs);
+        this.score = this.calScore(stateObs);
+    }
+
+    private double calScore(StateObservation stateObs) {
+        if(stateObs.getGameWinner() == Types.WINNER.PLAYER_LOSES)
+            return 100000;
+        else if(stateObs.getGameWinner() == Types.WINNER.PLAYER_WINS)
+            return -100000;
+        else {
+            ArrayList<Observation>[] fixedPositions = stateObs.getImmovablePositions();
+            ArrayList<Observation>[] movingPositions = stateObs.getMovablePositions();
+
+            double score = 0;
+            Vector2d avatarpos = stateObs.getAvatarPosition();
+            // obstacle: key or goal
+            if(this.indexKey == -1) {
+                score -= 2000; // getKey bonus
+                score += this.calManhattan(fixedPositions[this.indexGoal].get(0).position, avatarpos)*8;
+            }
+            else {
+                score += this.calManhattan(fixedPositions[this.indexGoal].get(0).position, avatarpos)*0.5;
+
+                score += this.calManhattan(movingPositions[this.indexKey].get(0).position, avatarpos)*0.5;
+                // avoid box on the key
+                if (this.indexBox != -1) {
+                    for(Observation box: movingPositions[this.indexBox]) {
+                        if (this.calManhattan(box.position, movingPositions[this.indexKey].get(0).position) == 0) {
+                            score = 100000;break;
+                        }
+                    }
+                }
+
+            }
+            // obstacle: box and their hole
+            if (this.indexHole != -1){
+                Vector2d hole = fixedPositions[this.indexHole].get(0).position;
+                for(Observation box: movingPositions[this.indexBox]){
+                    score += this.calManhattan(hole, box.position)*16 + this.calManhattan(box.position, avatarpos);
+                }
+            }
+            return score;
+        }
+    }
+
+    private double calManhattan(Vector2d a, Vector2d b) {
+       return (Math.abs(a.copy().subtract(b).x) + Math.abs(a.copy().subtract(b).y));
+    }
+    private void getIndex(StateObservation stateObs) {
+
+        this.indexGoal=-1;
+        this.indexKey=-1;
+        this.indexMush=-1;
+        this.indexHole=-1;
+        this.indexBox=-1;
+        this.totalHole=-1;
+
         final int goal = 7;
         final int key = 6;
         final int mushroom = 5;
         final int hole = 2;
+        final int box = 8;
         ArrayList<Observation>[] fixedPositions = stateObs.getImmovablePositions();
         ArrayList<Observation>[] movingPositions = stateObs.getMovablePositions();
         for (int i = 0; i < fixedPositions.length; i++) {
             ArrayList<Observation> fixedPosition = fixedPositions[i];
             if (!fixedPosition.isEmpty()) {
                 switch (fixedPosition.get(0).itype) {
-                    case goal -> Agent.indexGoal = i;
+                    case goal -> this.indexGoal = i;
                     case hole -> {
-                        Agent.indexHole = i;
-                        Agent.totalHole = fixedPosition.size();
+                        this.indexHole = i;
+                        this.totalHole = fixedPosition.size();
                     }
-                    case mushroom -> Agent.indexMush = i;
+                    case mushroom -> this.indexMush = i;
                 }
             }
         }
-        for (int i = 0; i < movingPositions.length; i++) {
-            ArrayList<Observation> movingPosition = movingPositions[i];
-            if (!movingPosition.isEmpty()) {
-                if (movingPosition.get(0).itype == key) {
-                    Agent.indexKey = i;
-                    break;
+        if (movingPositions != null) {
+            for (int i = 0; i < movingPositions.length; i++) {
+                ArrayList<Observation> movingPosition = movingPositions[i];
+                if (!movingPosition.isEmpty()) {
+                    switch (movingPosition.get(0).itype) {
+                        case box -> this.indexBox = i;
+                        case key -> this.indexKey = i;
+                    }
                 }
             }
         }
-
-    }
-}
-
-class Node {
-    Types.ACTIONS action;
-    int depth;
-    float score;
-    public Node(Types.ACTIONS action, StateObservation stateObs, int depth) {
-        this.action = action;
-        this.depth = depth;
-        this.score = this.calScore(stateObs);
-    }
-
-    private float calScore(StateObservation stateObs) {
-        if(stateObs.getGameWinner() == Types.WINNER.PLAYER_LOSES)
-            return 100000;
-        else if(stateObs.getGameWinner() == Types.WINNER.PLAYER_WINS)
-            return 0;
-        else {
-            ArrayList<Observation>[] fixedPositions = stateObs.getImmovablePositions();
-            ArrayList<Observation>[] movingPositions = stateObs.getMovablePositions();
-            Vector2d avatarpos = stateObs.getAvatarPosition();
-            if(!movingPositions[Agent.indexKey].isEmpty()){
-                Vector2d keypos = movingPositions[Agent.indexKey].get(0).position;
-                double distKey = Math.abs(keypos.copy().subtract(avatarpos).x)
-                        + Math.abs(keypos.copy().subtract(avatarpos).y);
-                distKey = distKey/50;
-                return this.depth + this.calH(stateObs) + (float)distKey;
-            }
-            else {
-                return 0.0F;
-            }
-        }
-    }
-
-    private float calH(StateObservation stateObs) {
-        ArrayList<Observation>[] fixedPositions = stateObs.getImmovablePositions();
-        ArrayList<Observation>[] movingPositions = stateObs.getMovablePositions();
-        final float base = 100.0F;
-        int burdenKey = -100; //default value for non-hole
-        float payoffHole = 0.0F;
-        if (Agent.indexHole != 0 && Agent.totalHole != 0) {
-            payoffHole = (float) ((burdenKey/2)/Agent.totalHole);
-            burdenKey = burdenKey/2;
-        }
-        if (!movingPositions[Agent.indexKey].isEmpty() ) { // key exists
-            if (Agent.indexHole != 0)
-                return base + burdenKey + payoffHole*fixedPositions[Agent.indexHole].size();
-            else
-                return base + burdenKey;
-        }
-        else
-            return 0.0F;
     }
 }
 
 class Result {
     Stack<Types.ACTIONS> path = new Stack<>();
-    float maxScore;
-    public Result(Types.ACTIONS action, float score) {
+    double maxScore;
+    public Result(Types.ACTIONS action, double score) {
         this.path.push(action);
         this.maxScore = score;
     }
-
-    public float getMaxScore() {
+    public double getMaxScore() {
         return maxScore;
     }
 }

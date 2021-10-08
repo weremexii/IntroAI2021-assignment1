@@ -1,12 +1,15 @@
 package controllers.human;
 
 import core.game.Game;
+import core.game.Observation;
 import core.game.StateObservation;
 import core.player.AbstractPlayer;
 import ontology.Types;
 import tools.ElapsedCpuTimer;
 import tools.Utils;
 import tools.Vector2d;
+
+import java.util.ArrayList;
 
 /**
  * Created by diego on 06/02/14.
@@ -33,6 +36,16 @@ public class Agent extends AbstractPlayer
      */
     public Types.ACTIONS act(StateObservation stateObs, ElapsedCpuTimer elapsedTimer)
     {
+        ArrayList<Observation>[] fixedPositions = stateObs.getImmovablePositions();
+        ArrayList<Observation>[] movingPositions = stateObs.getMovablePositions();
+        Vector2d goalpos = fixedPositions[1].get(0).position; //目标的坐标
+        if(!movingPositions[0].isEmpty()) {
+            Vector2d keypos = movingPositions[0].get(0).position;
+
+        } //钥匙的坐标
+        //Vector2d mogus = fixedPositions[2].get(0).position; //mogu的坐标
+        Vector2d avatarpos = stateObs.getAvatarPosition();
+
         Vector2d move = Utils.processMovementActionKeys(Game.ki.getMask());
         boolean useOn = Utils.processUseKey(Game.ki.getMask());
 

@@ -10,12 +10,7 @@ import ontology.Types;
 import tools.ElapsedCpuTimer;
 
 public class Agent extends AbstractPlayer{
-    /**
-     * Observation grid.
-     */
-    protected ArrayList<Observation> grid[][];
-    protected int block_size;
-    protected StackTree tree;
+    protected StackTree tree; //LIFO implement
 
     /**
      * Public constructor with state observation and time due.
@@ -24,9 +19,6 @@ public class Agent extends AbstractPlayer{
      */
     public Agent(StateObservation so, ElapsedCpuTimer elapsedTimer)
     {
-        grid = so.getObservationGrid();
-        block_size = so.getBlockSize();
-        // construct tree
         tree = new StackTree(so.copy());
     }
 
@@ -46,14 +38,14 @@ public class Agent extends AbstractPlayer{
 
 class StackTree {
     Stack<Node> fringe = new Stack<>();
-    StateObservation rootState;
-    StateObservation inProcess;
+    StateObservation rootState; // backup the state for later use
+    StateObservation inProcess; // a state used for expanding nodes
     boolean success = false;
-    int actPointer = 0;
-    public StackTree(StateObservation state) {
+    int actPointer = 0; // a index to indicate what's the next action for Agent.act()
+    public StackTree(StateObservation state) { // constructor
         this.rootState = state.copy();
         this.inProcess = state.copy();
-        Node rootNode = new Node(null, state.copy());
+        Node rootNode = new Node(null, state.copy()); // copy a state to node for judging whether it is actable
         if (rootNode.isActable()) {
             this.fringe.push(rootNode);
         }
@@ -63,7 +55,7 @@ class StackTree {
     public boolean Search() {
         if (this.fringe.isEmpty()) return false;
         else {
-
+            // main loop to search the winning state
             while(this.inProcess.getGameWinner() != Types.WINNER.PLAYER_WINS && this.fringe.size() > 0) {
                 Node select = this.fringe.peek();
                 //if (select.isActable() && this.inProcess.getGameTick() < 100) {
@@ -73,7 +65,7 @@ class StackTree {
                 //}
                 if (select.isActable()) {
                     Types.ACTIONS action = select.getAction();
-                    StateObservation forCheck = this.inProcess.copy();
+                    StateObservation forCheck = this.inProcess.copy(); // copy a state to check whether this action gets a repeat state
                     forCheck.advance(action);
                     if (!this.checkRepeat(forCheck)) {
                         this.inProcess.advance(action);
@@ -81,7 +73,7 @@ class StackTree {
 
                     }
                 }
-                else {
+                else { // the peak node can't expand, pop it the rebuild the inProcess state
                     // go back
                     this.fringe.pop();
                     this.inProcess = this.rebuild();
@@ -99,7 +91,7 @@ class StackTree {
         }
     }
 
-    public Types.ACTIONS act() {
+    public Types.ACTIONS act() { // for Agent.act()
         actPointer++;
         //System.out.println(actPointer);
         if (actPointer < this.fringe.size()) {
@@ -109,7 +101,7 @@ class StackTree {
             return null;
         }
     }
-    private StateObservation rebuild() {
+    private StateObservation rebuild() { // to rebuild the inProcess state
         StateObservation result = this.rootState.copy();
         for(int i = 1; i < this.fringe.size(); i++) {
             result.advance(this.fringe.get(i).action);
@@ -133,9 +125,9 @@ class StackTree {
 class Node {
     //static Random randomGenerator = new Random();
     Types.ACTIONS action;
-    ArrayList<Types.ACTIONS> avails;
-    ArrayList<Integer> actables = new ArrayList<>();
-    public Node(Types.ACTIONS action, StateObservation stateCopy){
+    ArrayList<Types.ACTIONS> avails; // to store the Types.ACTION instances
+    ArrayList<Integer> actables = new ArrayList<>(); // to indicate which ACTION is actable
+    public Node(Types.ACTIONS action, StateObservation stateCopy){ // constructor
         this.action = action;
         this.getActables(stateCopy);
     }
@@ -154,7 +146,7 @@ class Node {
         return this.actables.size() != 0;
     }
 
-    private void getActables(StateObservation state) {
+    private void getActables(StateObservation state) { // use the introducted state to judge the actable actions
         this.avails = state.getAvailableActions();
 
         for(int i = 0; i < avails.size(); i++) {

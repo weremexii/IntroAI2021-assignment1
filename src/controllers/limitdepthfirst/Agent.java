@@ -10,20 +10,13 @@ import tools.Vector2d;
 import java.util.*;
 
 public class Agent extends AbstractPlayer{
-    // index table for itype
-    static int indexGoal=0;
-    static int indexKey=0;
-    static int indexMush=0;
-    static int indexHole=0;
-    static int totalHole=0;
 
-    final int limit = 5;
-    Result lastResult = null;
-    Stack<StateObservation> closed = new Stack<>();
+    final int limit = 5; // the depth limit
+    Result lastResult = null; // to store the explored path generated from the depthlimit search
+    Stack<StateObservation> closed = new Stack<>(); // the previous state
 
-    public Agent(StateObservation stateObs, ElapsedCpuTimer elapsedTimer) {
-        // init
-        this.getIndex(stateObs);
+    public Agent(StateObservation stateObs, ElapsedCpuTimer elapsedTimer) { // constructor
+        ;
     }
 
     /**
@@ -38,10 +31,11 @@ public class Agent extends AbstractPlayer{
         this.closed.push(stateObs.copy());
         Types.ACTIONS action = null;
 
+        // lastResult is empty and re-search for path
         if (this.lastResult == null || this.lastResult.path.size() == 0)
             this.lastResult = this.treeSearch(stateObs);
 
-        // pop null
+        // pop null action in lastResult
         while (this.lastResult.path.peek() == null) {
             this.lastResult.path.pop();
         }
@@ -49,29 +43,29 @@ public class Agent extends AbstractPlayer{
         return action;
     }
 
-    public Result treeSearch(StateObservation stateObs) {
+    public Result treeSearch(StateObservation stateObs) { // call recursiveDLS
         Node root = new Node(null, stateObs, 0);
-        Result searchResult = this.recersiveDLS(root, stateObs);
+        Result searchResult = this.recursiveDLS(root, stateObs);
         return searchResult;
     }
 
-    public Result recersiveDLS(Node node, StateObservation stateObs) {
-        if (node.depth == this.limit)
-            return new Result(node.action, node.score);
+    public Result recursiveDLS(Node node, StateObservation stateObs) {
+        if (node.depth == this.limit) // reach the limit depth
+            return new Result(node.action, node.score); // directly return the node
         else {
             ArrayList<Result> results = new ArrayList<>();
-            for (Integer i: this.expand(stateObs)) {
+            for (Integer i: this.expand(stateObs)) { // expand the introducted node
                 Types.ACTIONS action = stateObs.getAvailableActions().get(i);
                 StateObservation stateCop = stateObs.copy();
                 stateCop.advance(action);
 
                 Node newNode = new Node(action, stateCop, node.depth+1);
-                results.add(recersiveDLS(newNode, stateCop));
+                results.add(recursiveDLS(newNode, stateCop)); // recursively add results
             }
             if (results.isEmpty())
                 return new Result(node.action, node.score);
             else {
-                Result maxresult = results.stream().min(Comparator.comparing(Result::getMaxScore)).get();
+                Result maxresult = results.stream().min(Comparator.comparing(Result::getMaxScore)).get(); // return the max score result
                 maxresult.path.push(node.action);
                 return maxresult;
             }
@@ -82,18 +76,18 @@ public class Agent extends AbstractPlayer{
 
 
         ArrayList<Types.ACTIONS> actions = stateObs.getAvailableActions();
-        ArrayList<Integer> actual = new ArrayList<>();
+        ArrayList<Integer> actual = new ArrayList<>(); // store the actions that actually make changes
         for(int i = 0; i < actions.size(); i++) {
             StateObservation stateCop = stateObs.copy();
             stateCop.advance(actions.get(i));
             //if(!stateCop.equalPosition(stateObs) && !this.oldState.contains(Arrays.deepHashCode(stateCop.getObservationGrid())) )
-            if(!stateCop.equalPosition(stateObs) && !this.compareClosed(stateCop))
+            if(!stateCop.equalPosition(stateObs) && !this.compareClosed(stateCop)) // compare to the origin state and the old states
                 actual.add(i);
         }
         return actual;
     }
 
-    public boolean compareClosed(StateObservation stateObs) {
+    public boolean compareClosed(StateObservation stateObs) { // as named
         for(StateObservation stateClosed: this.closed){
             if(stateClosed.equalPosition(stateObs))
                 return true;
@@ -101,7 +95,50 @@ public class Agent extends AbstractPlayer{
         return false;
     }
 
-    public void getIndex(StateObservation stateObs) {
+
+}
+
+class Node {
+    // index table for itype
+    // use Observation.itype the Agent can judge what's the wanted index of wanted Observation
+    int indexGoal=-1;
+    int indexKey=-1;
+    int indexMush=-1;
+    int indexHole=-1;
+    int totalHole=-1;
+
+    Types.ACTIONS action;
+    int depth;
+    float score;
+    public Node(Types.ACTIONS action, StateObservation stateObs, int depth) {
+        this.action = action;
+        this.depth = depth;
+        this.getIndex(stateObs); // init, use itype to get index
+        this.score = this.calScore(stateObs); // construct to calculate score
+    }
+
+    private float calScore(StateObservation stateObs) { // make Avatar to find the key
+        if(stateObs.getGameWinner() == Types.WINNER.PLAYER_LOSES)
+            return 100000;
+        else if(stateObs.getGameWinner() == Types.WINNER.PLAYER_WINS)
+            return 0;
+        else {
+            ArrayList<Observation>[] movingPositions = stateObs.getMovablePositions();
+            Vector2d avatarpos = stateObs.getAvatarPosition();
+            if(this.indexKey != -1){
+                Vector2d keypos = movingPositions[this.indexKey].get(0).position;
+                double distKey = Math.abs(keypos.copy().subtract(avatarpos).x)
+                        + Math.abs(keypos.copy().subtract(avatarpos).y);
+                distKey = distKey/50;
+                return (float)distKey;
+            }
+            else {
+                return 0.0F;
+            }
+        }
+    }
+    private void getIndex(StateObservation stateObs) { // get Observation object index
+        // the fixed itype index
         final int goal = 7;
         final int key = 6;
         final int mushroom = 5;
@@ -112,12 +149,12 @@ public class Agent extends AbstractPlayer{
             ArrayList<Observation> fixedPosition = fixedPositions[i];
             if (!fixedPosition.isEmpty()) {
                 switch (fixedPosition.get(0).itype) {
-                    case goal -> Agent.indexGoal = i;
+                    case goal -> this.indexGoal = i;
                     case hole -> {
-                        Agent.indexHole = i;
-                        Agent.totalHole = fixedPosition.size();
+                        this.indexHole = i;
+                        this.totalHole = fixedPosition.size();
                     }
-                    case mushroom -> Agent.indexMush = i;
+                    case mushroom -> this.indexMush = i;
                 }
             }
         }
@@ -125,7 +162,7 @@ public class Agent extends AbstractPlayer{
             ArrayList<Observation> movingPosition = movingPositions[i];
             if (!movingPosition.isEmpty()) {
                 if (movingPosition.get(0).itype == key) {
-                    Agent.indexKey = i;
+                    this.indexKey = i;
                     break;
                 }
             }
@@ -134,60 +171,7 @@ public class Agent extends AbstractPlayer{
     }
 }
 
-class Node {
-    Types.ACTIONS action;
-    int depth;
-    float score;
-    public Node(Types.ACTIONS action, StateObservation stateObs, int depth) {
-        this.action = action;
-        this.depth = depth;
-        this.score = this.calScore(stateObs);
-    }
-
-    private float calScore(StateObservation stateObs) {
-        if(stateObs.getGameWinner() == Types.WINNER.PLAYER_LOSES)
-            return 100000;
-        else if(stateObs.getGameWinner() == Types.WINNER.PLAYER_WINS)
-            return 0;
-        else {
-            ArrayList<Observation>[] fixedPositions = stateObs.getImmovablePositions();
-            ArrayList<Observation>[] movingPositions = stateObs.getMovablePositions();
-            Vector2d avatarpos = stateObs.getAvatarPosition();
-            if(!movingPositions[Agent.indexKey].isEmpty()){
-                Vector2d keypos = movingPositions[Agent.indexKey].get(0).position;
-                double distKey = Math.abs(keypos.copy().subtract(avatarpos).x)
-                        + Math.abs(keypos.copy().subtract(avatarpos).y);
-                distKey = distKey/50;
-                return this.calH(stateObs) + (float)distKey;
-            }
-            else {
-                return 0.0F;
-            }
-        }
-    }
-
-    private float calH(StateObservation stateObs) {
-        ArrayList<Observation>[] fixedPositions = stateObs.getImmovablePositions();
-        ArrayList<Observation>[] movingPositions = stateObs.getMovablePositions();
-        final float base = 100.0F;
-        int burdenKey = -100; //default value for non-hole
-        float payoffHole = 0.0F;
-        if (Agent.indexHole != 0 && Agent.totalHole != 0) {
-            payoffHole = (float) ((burdenKey/2)/Agent.totalHole);
-            burdenKey = burdenKey/2;
-        }
-        if (!movingPositions[Agent.indexKey].isEmpty() ) { // key exists
-            if (Agent.indexHole != 0)
-                return base + burdenKey + payoffHole*fixedPositions[Agent.indexHole].size();
-            else
-                return base + burdenKey;
-        }
-        else
-            return 0.0F;
-    }
-}
-
-class Result {
+class Result { // a implement contains the generated path to get the max score
     Stack<Types.ACTIONS> path = new Stack<>();
     float maxScore;
     public Result(Types.ACTIONS action, float score) {
